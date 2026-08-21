@@ -1,4 +1,5 @@
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import get_user_model, authenticate
+from django.utils.translation import gettext as _
 from rest_framework import serializers
 
 
@@ -21,17 +22,28 @@ class UserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
         user = super().update(instance, validated_data)
+
         if password:
             user.set_password(password)
             user.save()
+
         return user
 
 
 class AuthTokenSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.CharField(
+        label=_("Email"),
+        write_only=True
+    )
     password = serializers.CharField(
+        label=_("Password"),
         style={"input_type": "password"},
         trim_whitespace=False,
+        write_only=True
+    )
+    token = serializers.CharField(
+        label=_("Token"),
+        read_only=True
     )
 
     def validate(self, attrs):
@@ -42,16 +54,15 @@ class AuthTokenSerializer(serializers.Serializer):
             user = authenticate(
                 request=self.context.get("request"),
                 username=email,
-                password=password,
+                password=password
             )
+
             if not user:
-                raise serializers.ValidationError(
-                    "Unable to authenticate with provided credentials"
-                )
+                msg = _("Unable to authenticate with provided credentials")
+                raise serializers.ValidationError(msg, code="authorization")
         else:
-            raise serializers.ValidationError(
-                "Must include 'email' and 'password'."
-            )
+            msg = _('Must include "email" and "password".')
+            raise serializers.ValidationError(msg, code="authorization")
 
         attrs["user"] = user
         return attrs
